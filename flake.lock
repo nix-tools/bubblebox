@@ -132,6 +132,22 @@
         "type": "github"
       }
     },
+    "pi-mono": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777591933,
+        "narHash": "sha256-brxktr/vTBLGlhEyfFRrBO0JSy9cJhnZXKk+ucge2uM=",
+        "owner": "badlogic",
+        "repo": "pi-mono",
+        "rev": "8040dd6ded6bd52b2b6271ab3588c4474715a4dd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "badlogic",
+        "repo": "pi-mono",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -226,6 +242,7 @@
         "hermes-agent": "hermes-agent",
         "import-tree": "import-tree",
         "nixpkgs": "nixpkgs_2",
+        "pi-mono": "pi-mono",
         "treefmt-nix": "treefmt-nix"
       }
     },

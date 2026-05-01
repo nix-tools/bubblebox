@@ -1,32 +1,54 @@
 # bubblebox
 
-Sandboxed launchers for CLI agents. Generalizes [numtide/claudebox][claudebox] over an arbitrary CLI
-binary, so the same bubblewrap (Linux) / seatbelt (macOS) wrapping serves `claude`, `opencode`, and
-`hermes` from one builder. Additional CLIs are welcome.
+[Bubblewrap][bubblewrap]/seatbelt-sandboxed launchers for CLIs. Generalizes numtide's
+[claudebox][claudebox] over an arbitrary CLI binary, so the same bubblewrap (Linux) / seatbelt
+(macOS) wrapping serves multiple CLIs from one builder. Additional CLIs are welcome.
 
-Like claudebox, each box gets its own isolated `$HOME`, only the agent's config files are bound
-through, the project parent is read-only, the project itself is read-write, and `/run/user/$UID` is
-hidden by default.
+Like numtide's claudebox, each CLI gets a generic NixOS with an isolated `$HOME` and...
+- `./` in read-write mode
+- `../` in read-only mode
+- (e.g.) `~/.claude` in read-write mode 
+- `/run/user/$UID` is hidden by default
 
-## What the flake exposes
-
-- **apps** — sandboxed launchers for each CLI
-- **packages** — underlying derivations for each CLI
-- **overlays.default** — Nixpkgs overlay adding all boxes as top-level attributes
-
-Available CLIs:
+## Available CLIs
 
 - `claudebox` — Claude Code
-- `opencodebox` — opencode
-- `hermesbox` — Hermes Agent
+- `opencodebox` — [OpenCode](https://github.com/anomalyco/opencode)
+- `hermesbox` — [Hermes Agent](https://github.com/nousresearch/hermes-agent)
+- `pibox` — [pi agent](https://github.com/badlogic/pi-mono/)
 
-## Run one with `nix run`
+## This flake exposes
+
+- **apps** for running without installing
+- **packages** for installing into flakes
+- **overlays.default** — for adding all programs to `pkgs`
+
+## `nix run` without installing
 
 ```sh
 nix run github:nix-tools/bubblebox#claudebox
 nix run github:nix-tools/bubblebox#opencodebox
 nix run github:nix-tools/bubblebox#hermesbox
+nix run github:nix-tools/bubblebox#pibox
 ```
+
+## Adding a new CLI
+
+Add an entry to the `boxes` attrset in `nix/packages.nix`:
+
+```nix
+mybox = {
+  tool = pkgs.my-cli;
+  toolBinary = "my-cli";
+  homeBindings = [ ".my-cli" ];
+  defaultArgs = [ ];
+  toolEnv = { };
+  description = "Sandboxed environment for my-cli";
+};
+```
+
+This produces the corresponding package, app, and overlay attribute
+automatically. The builder is `mkBubblebox` in `nix/bubblebox.nix`.
 
 ## Forwarding arguments to the wrapped CLI
 
@@ -35,7 +57,6 @@ after a literal `--` to the wrapped CLI. So when you invoke a box directly:
 
 ```sh
 claudebox -- --continue
-claudebox --allow-ssh-agent -- --resume
 opencodebox -- run "fix the tests"
 ```
 
@@ -49,14 +70,13 @@ nix run github:nix-tools/bubblebox#claudebox -- --allow-ssh-agent -- --resume
 nix run github:nix-tools/bubblebox#opencodebox -- -- run "fix the tests"
 ```
 
-The same applies to `nix shell -c` and friends — anything that itself
-interprets `--` consumes one before the box ever sees it.
-
 ## Add to `environment.systemPackages` via the overlay
 
 ```nix
 {
+  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.bubblebox.url = "github:nix-tools/bubblebox";
+  inputs.bubblebox.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = { self, nixpkgs, bubblebox, ... }: {
     nixosConfigurations.example = nixpkgs.lib.nixosSystem {
@@ -68,6 +88,7 @@ interprets `--` consumes one before the box ever sees it.
             pkgs.claudebox
             pkgs.opencodebox
             pkgs.hermesbox
+            pkgs.pibox
           ];
         })
       ];
@@ -76,7 +97,7 @@ interprets `--` consumes one before the box ever sees it.
 }
 ```
 
-## Minimal flake with a numtide devshell containing all three
+## Minimal flake with a numtide devshell
 
 ```nix
 {
@@ -101,34 +122,18 @@ interprets `--` consumes one before the box ever sees it.
           pkgs.claudebox
           pkgs.opencodebox
           pkgs.hermesbox
+          pkgs.pibox
         ];
       };
     };
 }
 ```
 
-`direnv allow` then `claudebox`, `opencodebox`, or `hermesbox`.
-
-## Adding a new box
-
-Add an entry to the `boxes` attrset in `nix/packages.nix`:
-
-```nix
-mybox = {
-  tool = pkgs.my-cli;
-  toolBinary = "my-cli";
-  homeBindings = [ ".my-cli" ];
-  defaultArgs = [ ];
-  toolEnv = { };
-  description = "Sandboxed environment for my-cli";
-};
-```
-
-This produces the corresponding package, app, and overlay attribute
-automatically. The builder is `mkBubblebox` in `nix/bubblebox.nix`.
+`direnv allow` then `claudebox`, `opencodebox`, `hermesbox`, or `pibox`.
 
 ## License
 
 MIT.
 
+[bubblewrap]: https://github.com/containers/bubblewrap
 [claudebox]: https://github.com/numtide/claudebox

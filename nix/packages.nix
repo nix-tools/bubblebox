@@ -6,6 +6,7 @@
       system,
       lib,
       mkBubblebox,
+      pi-agent,
       ...
     }:
     let
@@ -45,6 +46,14 @@
           ];
           description = "Sandboxed environment for Hermes Agent";
           homepage = "https://github.com/NousResearch/hermes-agent";
+        };
+
+        pibox = {
+          tool = pi-agent;
+          toolBinary = "pi";
+          homeBindings = [ ".pi" ];
+          description = "Sandboxed environment for Pi agent";
+          homepage = "https://github.com/badlogic/pi-mono";
         };
       };
 
