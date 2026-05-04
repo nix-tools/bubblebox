@@ -16,6 +16,7 @@ Like numtide's claudebox, each CLI gets a generic NixOS with an isolated `$HOME`
 - `opencodebox` — [OpenCode](https://github.com/anomalyco/opencode)
 - `hermesbox` — [Hermes Agent](https://github.com/nousresearch/hermes-agent)
 - `pibox` — [pi agent](https://github.com/badlogic/pi-mono/)
+- `pingbox` — sandboxed ping for network diagnostics
 
 ## This flake exposes
 
@@ -30,6 +31,7 @@ nix run github:nix-tools/bubblebox#claudebox
 nix run github:nix-tools/bubblebox#opencodebox
 nix run github:nix-tools/bubblebox#hermesbox
 nix run github:nix-tools/bubblebox#pibox
+nix run github:nix-tools/bubblebox#pingbox -- -- hckrnews.com
 ```
 
 ## Adding a new CLI

@@ -201,6 +201,9 @@ class BubblewrapSandbox extends Sandbox {
 			// Selective /run mounts (skip /run/user/$UID by default).
 			"--ro-bind-try", "/run/systemd/resolve", "/run/systemd/resolve",
 			"--ro-bind-try", "/run/current-system", "/run/current-system",
+
+			// WSL2: /etc/resolv.conf is a symlink to /mnt/wsl/resolv.conf.
+			"--ro-bind-try", "/mnt/wsl", "/mnt/wsl",
 			"--ro-bind-try", "/run/booted-system", "/run/booted-system",
 			"--ro-bind-try", "/run/opengl-driver", "/run/opengl-driver",
 			"--ro-bind-try", "/run/opengl-driver-32", "/run/opengl-driver-32",
