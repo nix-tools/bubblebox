@@ -55,6 +55,15 @@
           description = "Sandboxed environment for Pi agent";
           homepage = "https://github.com/badlogic/pi-mono";
         };
+
+        pingbox = {
+          # iputils (NixOS, system-manager): supports unprivileged ICMP via SOCK_DGRAM.
+          # inetutils (nix-darwin): cross-platform GNU ping for macOS.
+          tool = if pkgs.stdenv.isDarwin then pkgs.inetutils else pkgs.iputils;
+          toolBinary = "ping";
+          homeBindings = [ ];
+          description = "Sandboxed ping for network diagnostics";
+        };
       };
 
       mkApp = pkg: {
