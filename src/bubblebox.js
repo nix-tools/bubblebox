@@ -183,6 +183,7 @@ class BubblewrapSandbox extends Sandbox {
 			allowSshAgent,
 			allowGpgAgent,
 			allowXdgRuntime,
+			extraMounts,
 		} = this.config;
 
 		const home = process.env.HOME;
@@ -265,6 +266,12 @@ class BubblewrapSandbox extends Sandbox {
 			}
 		}
 
+		// User-supplied mounts come last so they override anything above
+		// (bwrap applies binds in order; later wins on overlap).
+		for (const { path: p, mode } of extraMounts) {
+			args.push(mode === "rw" ? "--bind" : "--ro-bind", p, p);
+		}
+
 		args.push("bash", "-c", script);
 
 		return { cmd: "bwrap", args, env: process.env };
@@ -277,7 +284,7 @@ class BubblewrapSandbox extends Sandbox {
 
 class SeatbeltSandbox extends Sandbox {
 	wrap(script) {
-		const { repoRoot } = this.config;
+		const { repoRoot, extraMounts } = this.config;
 
 		const seatbeltProfile = process.env.BUBBLEBOX_SEATBELT_PROFILE;
 		if (!seatbeltProfile || !pathExists(seatbeltProfile)) {
@@ -298,6 +305,13 @@ class SeatbeltSandbox extends Sandbox {
 		];
 		if (canonicalTmpdir !== canonicalSlashTmp) {
 			writablePaths.push('(subpath (param "SLASH_TMP"))');
+		}
+		// User-supplied --rw paths. Read-only --ro paths need no entry —
+		// the default `(allow file-read*)` rule already covers them.
+		for (const { path: p, mode } of extraMounts) {
+			if (mode === "rw") {
+				writablePaths.push(`(subpath ${JSON.stringify(p)})`);
+			}
 		}
 
 		const dynamicPolicy = `
@@ -349,6 +363,7 @@ function mergeOptions(cliOverrides, fileConfig) {
 			cliOverrides.allowXdgRuntime !== undefined
 				? cliOverrides.allowXdgRuntime
 				: fileConfig.allowXdgRuntime,
+		extraMounts: cliOverrides.extraMounts,
 	};
 }
 
@@ -358,6 +373,7 @@ function parseArgs(args) {
 		allowSshAgent: undefined,
 		allowGpgAgent: undefined,
 		allowXdgRuntime: undefined,
+		extraMounts: [],
 	};
 
 	let i = 0;
@@ -376,6 +392,20 @@ function parseArgs(args) {
 				cliOverrides.allowXdgRuntime = true;
 				i++;
 				break;
+			case "--rw":
+			case "--ro": {
+				const p = args[i + 1];
+				if (p === undefined) {
+					console.error(`${arg} requires a PATH argument`);
+					process.exit(1);
+				}
+				cliOverrides.extraMounts.push({
+					path: p,
+					mode: arg === "--rw" ? "rw" : "ro",
+				});
+				i += 2;
+				break;
+			}
 			case "-h":
 			case "--help":
 				showHelp();
@@ -409,12 +439,17 @@ Options:
   --allow-ssh-agent           Allow access to SSH agent socket
   --allow-gpg-agent           Allow access to GPG agent socket
   --allow-xdg-runtime         Allow full XDG runtime directory access
+  --rw PATH                   Mount PATH read-write inside the sandbox
+  --ro PATH                   Mount PATH read-only inside the sandbox
+                              (--rw/--ro repeatable; later wins on overlap;
+                              overrides the default ../ read-only mount)
   -h, --help                  Show this help message
 
 Forward extra arguments to ${BOX.tool} after a literal '--':
 
   ${BOX.name} -- --foo bar
   ${BOX.name} --allow-ssh-agent -- --resume
+  ${BOX.name} --rw ../worktree-base -- --continue
 
 Configuration:
   Settings can be configured in ${configPath}.
@@ -493,6 +528,15 @@ function main() {
 		shareTree = realRepoRoot;
 	}
 
+	const extraMounts = options.extraMounts.map(({ path: p, mode }) => {
+		const abs = path.resolve(projectDir, p);
+		if (!pathExists(abs)) {
+			console.error(`${BOX.name}: --${mode} path does not exist: ${p}`);
+			process.exit(1);
+		}
+		return { path: realpath(abs), mode };
+	});
+
 	let sandbox;
 	try {
 		sandbox = Sandbox.create({
@@ -503,6 +547,7 @@ function main() {
 			allowSshAgent: options.allowSshAgent,
 			allowGpgAgent: options.allowGpgAgent,
 			allowXdgRuntime: options.allowXdgRuntime,
+			extraMounts,
 		});
 	} catch (err) {
 		console.error(`Error: ${err.message}`);

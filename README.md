@@ -10,6 +10,16 @@ Like numtide's claudebox, each CLI gets a generic NixOS with an isolated `$HOME`
 - (e.g.) `~/.claude` in read-write mode 
 - `/run/user/$UID` is hidden by default
 
+Override mounts per invocation with `--rw PATH` / `--ro PATH`. Handy for working with git
+worktrees, or when you want to add a program-specific directory from `$HOME` or elsewhere:
+
+```sh
+claudebox --rw ../worktree-base -- --continue  # `git commit` works now
+claudebox --ro ~/Downloads/assets -- -c        # add extra out-of-band dir
+claudebox --ro ~/.config/age                   # who wants to live forever?
+claudebox --rw ~/.cargo                        # share Cargo package cache
+```
+
 ## Available CLIs
 
 - `claudebox` — Claude Code
