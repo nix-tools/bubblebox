@@ -11,12 +11,8 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    import-tree.url = "github:vic/import-tree";
-    hermes-agent.url = "github:NousResearch/hermes-agent";
-    pi-mono = {
-      url = "github:badlogic/pi-mono";
-      flake = false;
-    };
+    import-tree.url = "github:denful/import-tree";
+    # hermes-agent and pi-mono live in the "agents" partition (agents/flake.nix).
   };
 
   outputs =

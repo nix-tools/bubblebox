@@ -1,13 +1,9 @@
-# Builds the Pi agent CLI from github:badlogic/pi-mono and exposes it as a
-# per-system module argument (`pi-agent`), so packages.nix can wrap it
-# without falling back to `import` — which import-tree would mis-treat as
-# a flake-parts module.
 { inputs, ... }:
 {
   perSystem =
     { pkgs, ... }:
-    {
-      _module.args.pi-agent = pkgs.buildNpmPackage {
+    let
+      pi-agent = pkgs.buildNpmPackage {
         pname = "pi";
         version = "0.71.0";
 
@@ -35,9 +31,7 @@
           vips
         ];
 
-        # tsgo in the Nix sandbox produces stricter type errors than in the
-        # dev environment. Use --noCheck to skip type-checking while still
-        # emitting JS.
+        # tsgo is stricter in the Nix sandbox than in dev; --noCheck still emits JS.
         preBuild = ''
           for f in packages/*/package.json; do
             sed -i 's/tsgo -p/tsgo --noCheck -p/g' "$f"
@@ -46,8 +40,7 @@
 
         npmBuildScript = "build";
 
-        # npmInstallHook re-runs npm install with --omit=dev, which drops
-        # workspace build artifacts. Save them before install, restore after.
+        # npmInstallHook reinstalls with --omit=dev, dropping build artifacts; save and restore them.
         preInstall = ''
           for pkg in tui ai agent coding-agent mom web-ui pods; do
             if [ -d "packages/$pkg/dist" ]; then
@@ -80,6 +73,15 @@
           license = licenses.mit;
           mainProgram = "pi";
         };
+      };
+    in
+    {
+      boxes.pibox = {
+        tool = pi-agent;
+        toolBinary = "pi";
+        homeBindings = [ ".pi" ];
+        description = "Sandboxed environment for Pi agent";
+        homepage = "https://github.com/badlogic/pi-mono";
       };
     };
 }

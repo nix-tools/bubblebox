@@ -1,15 +1,33 @@
-{ inputs, ... }:
+{ flake-parts-lib, ... }:
 {
-  perSystem =
+  options.perSystem = flake-parts-lib.mkPerSystemOption (
+    { lib, ... }:
     {
+      options.boxes = lib.mkOption {
+        type = lib.types.lazyAttrsOf lib.types.raw;
+        default = { };
+        description = "Box specs keyed by name; each value is an argument set for mkBubblebox.";
+      };
+    }
+  );
+
+  config.perSystem =
+    {
+      config,
       pkgs,
-      system,
       lib,
       mkBubblebox,
-      pi-agent,
       ...
     }:
     let
+      mkApp = pkg: {
+        type = "app";
+        program = "${pkg}/bin/${pkg.meta.mainProgram}";
+        meta = pkg.meta;
+      };
+      packages = lib.mapAttrs (name: spec: mkBubblebox (spec // { inherit name; })) config.boxes;
+    in
+    {
       boxes = {
         claudebox = {
           tool = pkgs.claude-code;
@@ -35,30 +53,8 @@
           description = "Sandboxed environment for opencode";
         };
 
-        hermesbox = {
-          tool =
-            inputs.hermes-agent.packages.${system}.default
-              or (throw "hermes-agent has no package for ${system}");
-          toolBinary = "hermes";
-          homeBindings = [
-            ".hermes"
-            ".config/hermes"
-          ];
-          description = "Sandboxed environment for Hermes Agent";
-          homepage = "https://github.com/NousResearch/hermes-agent";
-        };
-
-        pibox = {
-          tool = pi-agent;
-          toolBinary = "pi";
-          homeBindings = [ ".pi" ];
-          description = "Sandboxed environment for Pi agent";
-          homepage = "https://github.com/badlogic/pi-mono";
-        };
-
         pingbox = {
-          # iputils (NixOS, system-manager): supports unprivileged ICMP via SOCK_DGRAM.
-          # inetutils (nix-darwin): cross-platform GNU ping for macOS.
+          # iputils: unprivileged ICMP on Linux; inetutils: ping on macOS.
           tool = if pkgs.stdenv.isDarwin then pkgs.inetutils else pkgs.iputils;
           toolBinary = "ping";
           homeBindings = [ ];
@@ -66,14 +62,7 @@
         };
       };
 
-      mkApp = pkg: {
-        type = "app";
-        program = "${pkg}/bin/${pkg.meta.mainProgram}";
-        meta = pkg.meta;
-      };
-    in
-    rec {
-      packages = lib.mapAttrs (name: spec: mkBubblebox (spec // { inherit name; })) boxes;
-      apps = (lib.mapAttrs (_name: mkApp) packages);
+      inherit packages;
+      apps = lib.mapAttrs (_name: mkApp) packages;
     };
 }
