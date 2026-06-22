@@ -59,14 +59,6 @@
           ];
           description = "Sandboxed environment for opencode";
         };
-
-        pingbox = {
-          # iputils: unprivileged ICMP on Linux; inetutils: ping on macOS.
-          tool = if pkgs.stdenv.isDarwin then pkgs.inetutils else pkgs.iputils;
-          toolBinary = "ping";
-          homeBindings = [ ];
-          description = "Sandboxed ping for network diagnostics";
-        };
       };
 
       inherit packages;

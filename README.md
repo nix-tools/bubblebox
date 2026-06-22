@@ -1,13 +1,14 @@
 # bubblebox
 
-[Bubblewrap][bubblewrap]/seatbelt-sandboxed launchers for CLIs. Generalizes numtide's
-[claudebox][claudebox] over an arbitrary CLI binary, so the same bubblewrap (Linux) / seatbelt
+[Bubblewrap]/seatbelt-sandboxed launchers for CLIs. Generalizes numtide's
+[claudebox] over an arbitrary CLI binary, so the same bubblewrap (Linux) / seatbelt
 (macOS) wrapping serves multiple CLIs from one builder. Additional CLIs are welcome.
 
 Like numtide's claudebox, each CLI gets a generic NixOS with an isolated `$HOME` and...
+
 - `./` in read-write mode
 - `../` in read-only mode
-- (e.g.) `~/.claude` in read-write mode 
+- (e.g.) `~/.claude` in read-write mode
 - `/run/user/$UID` is hidden by default
 
 Override mounts per invocation with `--rw PATH` / `--ro PATH`. Handy for working with git
@@ -27,7 +28,6 @@ claudebox --rw ~/.cargo                        # share Cargo package cache
 - `opencodebox` — [OpenCode](https://github.com/anomalyco/opencode)
 - `hermesbox` — [Hermes Agent](https://github.com/nousresearch/hermes-agent)
 - `pibox` — [pi agent](https://github.com/badlogic/pi-mono/)
-- `pingbox` — sandboxed ping for network diagnostics
 
 ## This flake exposes
 
@@ -43,7 +43,6 @@ nix run github:nix-tools/bubblebox#codexbox
 nix run github:nix-tools/bubblebox#opencodebox
 nix run github:nix-tools/bubblebox#hermesbox
 nix run github:nix-tools/bubblebox#pibox
-nix run github:nix-tools/bubblebox#pingbox -- -- hckrnews.com
 ```
 
 ## Adding a new CLI
