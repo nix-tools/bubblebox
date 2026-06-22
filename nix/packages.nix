@@ -43,6 +43,13 @@
           description = "Sandboxed environment for Claude Code";
         };
 
+        codexbox = {
+          tool = pkgs.codex;
+          toolBinary = "codex";
+          homeBindings = [ ".codex" ];
+          description = "Sandboxed environment for OpenAI Codex CLI";
+        };
+
         opencodebox = {
           tool = pkgs.opencode;
           toolBinary = "opencode";
