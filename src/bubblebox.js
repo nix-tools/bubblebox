@@ -10,10 +10,16 @@
 //     "tool":         "claude",
 //     "homeBindings": [".claude", ".claude.json"],
 //     "defaultArgs":  ["--dangerously-skip-permissions"],
-//     "env":          { "DISABLE_AUTOUPDATER": "1" }
+//     "env":          { "DISABLE_AUTOUPDATER": "1" },
+//     "profiles":     { "gh": { "mounts": [{ "path": "~/.config/gh", "mode": "ro" }],
+//                               "parentMounts": null } },
+//     "parentMounts": "none"
 //   }
 //
 // `name` and `tool` are required; the rest default to empty.
+//
+// A profile named "default" is active when no --profile is given. Profile
+// mounts are skipped when missing on the host; --rw/--ro paths must exist.
 //
 // Extra arguments after `--` on the command line are forwarded verbatim to
 // the wrapped tool, after `defaultArgs` (modeled on numtide/claudebox#5).
@@ -47,6 +53,8 @@ function loadBoxConfig() {
 		homeBindings: raw.homeBindings || [],
 		defaultArgs: raw.defaultArgs || [],
 		env: raw.env || {},
+		profiles: raw.profiles || {},
+		parentMounts: raw.parentMounts || "none",
 	};
 }
 
@@ -178,11 +186,12 @@ class BubblewrapSandbox extends Sandbox {
 		const {
 			sandboxHome,
 			homeBindMounts,
-			shareTree,
+			parentMount,
 			repoRoot,
 			allowSshAgent,
 			allowGpgAgent,
 			allowXdgRuntime,
+			profileMounts,
 			extraMounts,
 		} = this.config;
 
@@ -237,8 +246,8 @@ class BubblewrapSandbox extends Sandbox {
 			"--setenv", "TMP", "/tmp",
 		);
 
-		if (shareTree !== repoRoot) {
-			args.push("--ro-bind", shareTree, shareTree);
+		if (parentMount) {
+			args.push("--ro-bind", parentMount, parentMount);
 		}
 		args.push("--bind", repoRoot, repoRoot);
 
@@ -266,8 +275,11 @@ class BubblewrapSandbox extends Sandbox {
 			}
 		}
 
-		// User-supplied mounts come last so they override anything above
-		// (bwrap applies binds in order; later wins on overlap).
+		// Profile mounts, then user-supplied mounts, so CLI flags override
+		// profile paths (bwrap applies binds in order; later wins on overlap).
+		for (const { path: p, mode } of profileMounts) {
+			args.push(mode === "rw" ? "--bind-try" : "--ro-bind-try", p, p);
+		}
 		for (const { path: p, mode } of extraMounts) {
 			args.push(mode === "rw" ? "--bind" : "--ro-bind", p, p);
 		}
@@ -284,7 +296,7 @@ class BubblewrapSandbox extends Sandbox {
 
 class SeatbeltSandbox extends Sandbox {
 	wrap(script) {
-		const { repoRoot, extraMounts } = this.config;
+		const { repoRoot, profileMounts, extraMounts } = this.config;
 
 		const seatbeltProfile = process.env.BUBBLEBOX_SEATBELT_PROFILE;
 		if (!seatbeltProfile || !pathExists(seatbeltProfile)) {
@@ -306,9 +318,9 @@ class SeatbeltSandbox extends Sandbox {
 		if (canonicalTmpdir !== canonicalSlashTmp) {
 			writablePaths.push('(subpath (param "SLASH_TMP"))');
 		}
-		// User-supplied --rw paths. Read-only --ro paths need no entry —
+		// Profile and user-supplied rw paths. Read-only paths need no entry —
 		// the default `(allow file-read*)` rule already covers them.
-		for (const { path: p, mode } of extraMounts) {
+		for (const { path: p, mode } of [...profileMounts, ...extraMounts]) {
 			if (mode === "rw") {
 				writablePaths.push(`(subpath ${JSON.stringify(p)})`);
 			}
@@ -363,6 +375,7 @@ function mergeOptions(cliOverrides, fileConfig) {
 			cliOverrides.allowXdgRuntime !== undefined
 				? cliOverrides.allowXdgRuntime
 				: fileConfig.allowXdgRuntime,
+		profile: cliOverrides.profile,
 		extraMounts: cliOverrides.extraMounts,
 	};
 }
@@ -373,6 +386,7 @@ function parseArgs(args) {
 		allowSshAgent: undefined,
 		allowGpgAgent: undefined,
 		allowXdgRuntime: undefined,
+		profile: undefined,
 		extraMounts: [],
 	};
 
@@ -392,6 +406,16 @@ function parseArgs(args) {
 				cliOverrides.allowXdgRuntime = true;
 				i++;
 				break;
+			case "--profile": {
+				const name = args[i + 1];
+				if (name === undefined) {
+					console.error("--profile requires a NAME argument");
+					process.exit(1);
+				}
+				cliOverrides.profile = name;
+				i += 2;
+				break;
+			}
 			case "--rw":
 			case "--ro": {
 				const p = args[i + 1];
@@ -431,18 +455,24 @@ function showHelp() {
 	const dflt = BOX.defaultArgs.length
 		? `\n  By default, ${BOX.tool} is invoked with: ${BOX.defaultArgs.join(" ")}`
 		: "";
+	const profileNames = Object.keys(BOX.profiles);
+	const profiles = profileNames.length
+		? `\n  Profiles: ${profileNames.join(", ")}` +
+			(BOX.profiles.default ? ' ("default" is active when --profile is not given)' : "")
+		: "";
 	console.log(`Usage: ${BOX.name} [OPTIONS] [-- TOOL_ARGS...]
 
-Sandboxed launcher for "${BOX.tool}".${dflt}
+Sandboxed launcher for "${BOX.tool}".${dflt}${profiles}
 
 Options:
+  --profile NAME              Activate mount profile NAME (baked in via Nix)
   --allow-ssh-agent           Allow access to SSH agent socket
   --allow-gpg-agent           Allow access to GPG agent socket
   --allow-xdg-runtime         Allow full XDG runtime directory access
   --rw PATH                   Mount PATH read-write inside the sandbox
   --ro PATH                   Mount PATH read-only inside the sandbox
-                              (--rw/--ro repeatable; later wins on overlap;
-                              overrides the default ../ read-only mount)
+                              (--rw/--ro repeatable; later wins on overlap,
+                              including over profile mounts)
   -h, --help                  Show this help message
 
 Forward extra arguments to ${BOX.tool} after a literal '--':
@@ -517,16 +547,56 @@ function main() {
 		homeBindMounts.push({ src, dst });
 	}
 
+	// Resolve the active profile: --profile NAME, else "default" if defined.
+	let profile = { mounts: [], parentMounts: null };
+	if (options.profile !== undefined) {
+		profile = BOX.profiles[options.profile];
+		if (!profile) {
+			const known = Object.keys(BOX.profiles);
+			console.error(
+				`${BOX.name}: unknown profile: ${options.profile}` +
+					(known.length
+						? ` (available: ${known.join(", ")})`
+						: " (no profiles defined)"),
+			);
+			process.exit(1);
+		}
+	} else if (BOX.profiles.default) {
+		profile = BOX.profiles.default;
+	}
+
 	const realRepoRoot = realpath(repoRoot);
 	const realHome = realpath(home);
-	let shareTree;
-	if (realRepoRoot.startsWith(realHome + "/")) {
-		const relPath = realRepoRoot.slice(realHome.length + 1);
-		const topDir = relPath.split("/")[0];
-		shareTree = path.join(realHome, topDir);
-	} else {
-		shareTree = realRepoRoot;
+
+	// How much of the working tree's ancestry gets a read-only mount:
+	//   "none"   — nothing beyond the working tree itself
+	//   "parent" — the immediate parent directory
+	//   "tree"   — the deepest ancestor below $HOME (or /)
+	// $HOME and / themselves are never mounted.
+	const parentMounts = profile.parentMounts || BOX.parentMounts;
+	let parentMount = null;
+	if (parentMounts === "parent") {
+		parentMount = path.dirname(realRepoRoot);
+	} else if (parentMounts === "tree") {
+		const base = realRepoRoot.startsWith(realHome + "/") ? realHome : "/";
+		let p = path.dirname(realRepoRoot);
+		while (path.dirname(p) !== base && p !== base) {
+			p = path.dirname(p);
+		}
+		parentMount = p;
 	}
+	if (parentMount === realHome || parentMount === "/" || parentMount === realRepoRoot) {
+		parentMount = null;
+	}
+
+	// Profile mounts: "~/" expands to $HOME; missing paths are skipped
+	// (bwrap try-binds), so one profile can serve differently equipped hosts.
+	const profileMounts = (profile.mounts || []).map(({ path: p, mode }) => {
+		const expanded =
+			p === "~" || p.startsWith("~/") ? path.join(home, p.slice(1)) : p;
+		const abs = path.resolve(projectDir, expanded);
+		return { path: pathExists(abs) ? realpath(abs) : abs, mode };
+	});
 
 	const extraMounts = options.extraMounts.map(({ path: p, mode }) => {
 		const abs = path.resolve(projectDir, p);
@@ -542,11 +612,12 @@ function main() {
 		sandbox = Sandbox.create({
 			sandboxHome,
 			homeBindMounts,
-			shareTree,
+			parentMount,
 			repoRoot,
 			allowSshAgent: options.allowSshAgent,
 			allowGpgAgent: options.allowGpgAgent,
 			allowXdgRuntime: options.allowXdgRuntime,
+			profileMounts,
 			extraMounts,
 		});
 	} catch (err) {
