@@ -74,7 +74,7 @@ claudebox --rw ~/Projects/another-thing        # when you work on two things
 claudebox --rw ~/.cargo                        # share Cargo package cache
 ```
 
-### `--allow-ssh-agent` / `--allow-gpg-agent` / `--allow-xdg-runtime`
+### `--allow-ssh-agent` / `--allow-gpg-agent` / `--allow-dbus` / `--allow-xdg-runtime`
 
 `/run/user/$UID` is hidden by default. These flags punch a specific hole through for tools that
 need to reach a running agent:
@@ -82,8 +82,12 @@ need to reach a running agent:
 ```sh
 claudebox --allow-ssh-agent    # bind $SSH_AUTH_SOCK (e.g. `git push` over SSH)
 claudebox --allow-gpg-agent    # bind the GPG agent socket (e.g. signed commits)
+claudebox --allow-dbus         # bind the D-Bus session socket (e.g. OS keyring / Secret Service)
 claudebox --allow-xdg-runtime  # expose the whole XDG runtime dir, not just one socket
 ```
+
+`--allow-dbus` is a tighter alternative to `--allow-xdg-runtime` when a tool only needs the OS
+keyring: it binds just the D-Bus session socket instead of the whole runtime dir.
 
 ### `--profile NAME`
 
