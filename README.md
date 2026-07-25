@@ -7,8 +7,8 @@
 [rstrict]: https://github.com/creslinux/rstrict
 
 Generalizes numtide's [claudebox] over an arbitrary CLI binary, so the same sandboxing wrapper
-serves multiple CLIs from one builder. Adds [Landlock LSM][landlock]. Additional CLIs are welcome.
-Verified to work on NixOS, Ubuntu WSL, and MacOS (via Seatbelt).
+serves multiple CLIs from one builder. Adds [Landlock LSM][landlock] integration (soon). Additional
+CLIs are welcome. Verified to work on NixOS, Ubuntu WSL, and MacOS (via Seatbelt).
 
 [claudebox]: https://github.com/numtide/claudebox
 [landlock]: https://docs.kernel.org/security/landlock.html
