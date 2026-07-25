@@ -2,16 +2,9 @@
 
 [`nix`][nix] + [`bwrap`][bwrap] + [`rstrict`][rstrict] + `$CLI` = `${CLI}box`!
 
-[nix]: https://nixos.org/
-[bwrap]: https://github.com/containers/bubblewrap
-[rstrict]: https://github.com/creslinux/rstrict
-
 Generalizes numtide's [claudebox] over an arbitrary CLI binary, so the same sandboxing wrapper
 serves multiple CLIs from one builder. Adds [Landlock LSM][landlock] integration (soon). Additional
 CLIs are welcome. Verified to work on NixOS, Ubuntu WSL, and MacOS (via Seatbelt).
-
-[claudebox]: https://github.com/numtide/claudebox
-[landlock]: https://docs.kernel.org/security/landlock.html
 
 Like numtide's claudebox, each CLI gets a generic NixOS environment with an isolated `$HOME` and...
 
@@ -206,3 +199,8 @@ automatically. The builder is `mkBubblebox` in `nix/bubblebox.nix`.
 
 MIT.
 
+[bwrap]: https://github.com/containers/bubblewrap
+[claudebox]: https://github.com/numtide/claudebox
+[landlock]: https://docs.kernel.org/security/landlock.html
+[nix]: https://nixos.org/
+[rstrict]: https://github.com/creslinux/rstrict
