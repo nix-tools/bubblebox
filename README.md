@@ -49,7 +49,9 @@ environment.systemPackages = [
 Profile mounts that don't exist on the host are skipped, so one profile serves
 differently equipped machines. CLI `--rw`/`--ro` flags override profile mounts on
 overlap. Note that `.override { profiles = ...; }` replaces the box's whole profile
-set; claudebox ships a `gh` example profile (`claudebox --profile gh`).
+set; claudebox ships a `gh` example profile (`claudebox --profile gh`). Since `gh`
+stores its token in the OS keyring, pair it with `--allow-dbus` to reach the
+Secret Service over the D-Bus session bus (`claudebox --profile gh --allow-dbus`).
 
 `parentMounts` controls how much of the working tree's ancestry is bound read-only,
 and can be overridden per profile:
@@ -106,8 +108,11 @@ automatically. The builder is `mkBubblebox` in `nix/bubblebox.nix`.
 
 ## Forwarding arguments to the wrapped CLI
 
-Each box accepts its own flags (e.g. `--allow-ssh-agent`) and forwards anything
-after a literal `--` to the wrapped CLI. So when you invoke a box directly:
+Each box accepts its own flags (e.g. `--allow-ssh-agent`, `--allow-dbus`) and
+forwards anything after a literal `--` to the wrapped CLI. `--allow-dbus` binds
+only the D-Bus session socket (for the OS keyring / Secret Service) — a tighter
+alternative to `--allow-xdg-runtime`, which exposes the whole runtime dir. So when
+you invoke a box directly:
 
 ```sh
 claudebox -- --continue

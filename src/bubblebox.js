@@ -121,6 +121,7 @@ const CONFIG_DEFAULTS = {
 	allowSshAgent: false,
 	allowGpgAgent: false,
 	allowXdgRuntime: false,
+	allowDbus: false,
 };
 
 function getUserConfigPath() {
@@ -191,6 +192,7 @@ class BubblewrapSandbox extends Sandbox {
 			allowSshAgent,
 			allowGpgAgent,
 			allowXdgRuntime,
+			allowDbus,
 			profileMounts,
 			extraMounts,
 		} = this.config;
@@ -271,6 +273,19 @@ class BubblewrapSandbox extends Sandbox {
 				const gpgDir = path.join(xdgRuntimeDir, "gnupg");
 				if (isDirectory(gpgDir)) {
 					args.push("--ro-bind", gpgDir, gpgDir);
+				}
+			}
+			// D-Bus session socket only, for the OS keyring (Secret Service);
+			// a tight alternative to exposing the whole XDG runtime dir above.
+			if (allowDbus) {
+				const busSock = path.join(xdgRuntimeDir, "bus");
+				if (pathExists(busSock)) {
+					args.push("--ro-bind", busSock, busSock);
+					args.push(
+						"--setenv",
+						"DBUS_SESSION_BUS_ADDRESS",
+						`unix:path=${busSock}`,
+					);
 				}
 			}
 		}
@@ -375,6 +390,10 @@ function mergeOptions(cliOverrides, fileConfig) {
 			cliOverrides.allowXdgRuntime !== undefined
 				? cliOverrides.allowXdgRuntime
 				: fileConfig.allowXdgRuntime,
+		allowDbus:
+			cliOverrides.allowDbus !== undefined
+				? cliOverrides.allowDbus
+				: fileConfig.allowDbus,
 		profile: cliOverrides.profile,
 		extraMounts: cliOverrides.extraMounts,
 	};
@@ -386,6 +405,7 @@ function parseArgs(args) {
 		allowSshAgent: undefined,
 		allowGpgAgent: undefined,
 		allowXdgRuntime: undefined,
+		allowDbus: undefined,
 		profile: undefined,
 		extraMounts: [],
 	};
@@ -404,6 +424,10 @@ function parseArgs(args) {
 				break;
 			case "--allow-xdg-runtime":
 				cliOverrides.allowXdgRuntime = true;
+				i++;
+				break;
+			case "--allow-dbus":
+				cliOverrides.allowDbus = true;
 				i++;
 				break;
 			case "--profile": {
@@ -469,6 +493,8 @@ Options:
   --allow-ssh-agent           Allow access to SSH agent socket
   --allow-gpg-agent           Allow access to GPG agent socket
   --allow-xdg-runtime         Allow full XDG runtime directory access
+  --allow-dbus                Allow access to the D-Bus session bus
+                              (e.g. for OS keyring / Secret Service)
   --rw PATH                   Mount PATH read-write inside the sandbox
   --ro PATH                   Mount PATH read-only inside the sandbox
                               (--rw/--ro repeatable; later wins on overlap,
@@ -489,7 +515,8 @@ Configuration:
     {
       "allowSshAgent": false,
       "allowGpgAgent": false,
-      "allowXdgRuntime": false
+      "allowXdgRuntime": false,
+      "allowDbus": false
     }`);
 }
 
@@ -617,6 +644,7 @@ function main() {
 			allowSshAgent: options.allowSshAgent,
 			allowGpgAgent: options.allowGpgAgent,
 			allowXdgRuntime: options.allowXdgRuntime,
+			allowDbus: options.allowDbus,
 			profileMounts,
 			extraMounts,
 		});
