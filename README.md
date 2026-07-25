@@ -1,6 +1,6 @@
 # bubblebox
 
-[`nix`][nix] + [`bwrap`][bwrap] + [`rstrict`][strict] + `$CLI` = `${CLI}box`!
+[`nix`][nix] + [`bwrap`][bwrap] + [`rstrict`][rstrict] + `$CLI` = `${CLI}box`!
 
 [nix]: https://nixos.org/
 [bwrap]: https://github.com/containers/bubblewrap
