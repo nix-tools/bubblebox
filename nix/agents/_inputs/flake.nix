@@ -3,10 +3,7 @@
 
   inputs = {
     hermes-agent.url = "github:NousResearch/hermes-agent";
-    pi-mono = {
-      url = "github:badlogic/pi-mono";
-      flake = false;
-    };
+    llm-agents.url = "github:numtide/llm-agents.nix";
   };
 
   outputs = _: { };
