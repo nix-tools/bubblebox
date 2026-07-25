@@ -39,7 +39,7 @@ Like numtide's claudebox, each CLI gets a generic NixOS environment with an isol
     bubblebox.url = "github:nix-tools/bubblebox";
   };
 
-  outputs = { flake-parts, devshell, nixpkgs, bubblebox, ... }@inputs:
+  outputs = { nixpkgs, devshell, flake-parts, bubblebox, ... }@inputs:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       imports = [ devshell.flakeModule ];
