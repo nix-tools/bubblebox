@@ -19,7 +19,7 @@ Like numtide's claudebox, each CLI gets a generic NixOS environment with an isol
 - `codexbox` — [OpenAI Codex CLI](https://github.com/openai/codex)
 - `opencodebox` — [OpenCode](https://github.com/anomalyco/opencode)
 - `hermesbox` — [Hermes Agent](https://github.com/nousresearch/hermes-agent)
-- `pibox` — [pi agent](https://github.com/badlogic/pi-mono/)
+- `pibox` — [pi agent](https://github.com/earendil-works/pi)
 
 ## Getting started: Minimal flake with a numtide devshell
 
