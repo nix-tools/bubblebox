@@ -1,0 +1,56 @@
+name: Update flake locks
+
+# Inputs here are pinned, not tracked: without a bump they only move when a
+# consumer overrides them with `.follows`, which silently swaps a stale pin for
+# an unrelated nixpkgs. A weekly bump keeps the defaults close to what
+# consumers actually build against.
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays, 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: bump flake inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34, 2025-09-24
+
+      # Two locks: the root flake, and the "agents" partition's dev-only inputs
+      # (see nix/partitions.nix). Same pair as `just update`.
+      - name: nix flake update
+        run: |
+          set -euo pipefail
+          {
+            echo "## Root flake"
+            echo '```'
+            nix flake update 2>&1
+            echo '```'
+            echo "## Agents partition"
+            echo '```'
+            nix flake update --flake ./nix/agents/_inputs 2>&1
+            echo '```'
+          } > "$RUNNER_TEMP/pr-body.md"
+
+      - name: nix flake check
+        run: nix flake check --print-build-logs
+
+      # A pull request opened with GITHUB_TOKEN does not trigger CI. Set a
+      # FLAKE_UPDATE_TOKEN secret (a PAT or GitHub App token with contents +
+      # pull-requests write) to get the CI workflow to run on the bump.
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1, 2026-04-10
+        with:
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: chore/nix-flake-update
+          title: "chore: nix flake update"
+          commit-message: "chore: nix flake update"
+          body-path: ${{ runner.temp }}/pr-body.md
+          delete-branch: true
