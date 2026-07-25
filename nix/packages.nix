@@ -40,9 +40,9 @@
           toolEnv = {
             DISABLE_AUTOUPDATER = "1";
           };
-          # Example profile; activate with `claudebox --profile gh`. Add or
-          # replace profiles (e.g. a "default" one) via pkgs.claudebox.override.
-          profiles.gh.mounts = [ "~/.config/gh" ];
+          # Extension point: add mounts here via pkgs.claudebox.override to have
+          # them active without --profile.
+          profiles.default.mounts = [ ];
           description = "Sandboxed environment for Claude Code";
         };
 
