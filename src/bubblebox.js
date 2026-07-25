@@ -221,7 +221,7 @@ class BubblewrapSandbox extends Sandbox {
 			"--ro-bind-try", "/run/wrappers", "/run/wrappers",
 
 			"--ro-bind", "/nix", "/nix",
-			"--bind", "/nix/var/nix/daemon-socket", "/nix/var/nix/daemon-socket",
+			"--bind-try", "/nix/var/nix/daemon-socket", "/nix/var/nix/daemon-socket",
 
 			"--tmpfs", "/tmp",
 
@@ -632,6 +632,14 @@ function main() {
 cd ${shellQuote(projectDir)}
 exec ${shellQuote(BOX.tool)}${allArgs ? " " + allArgs : ""}
 `;
+
+	// Testing seam: emit the resolved sandbox invocation and exit without
+	// spawning, so tests can assert the mount plan without mounting anything.
+	if (process.env.BUBBLEBOX_DRYRUN) {
+		const { cmd, args } = sandbox.wrap(script);
+		process.stdout.write(JSON.stringify({ cmd, args }) + "\n");
+		return;
+	}
 
 	const child = sandbox.spawn(script);
 	child.on("close", (code) => process.exit(code || 0));
