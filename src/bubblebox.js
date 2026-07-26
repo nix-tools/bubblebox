@@ -146,6 +146,81 @@ function loadUserConfig() {
 }
 
 // =============================================================================
+// Sanitized /etc/ssh
+// =============================================================================
+
+// bwrap maps only the invoking uid into the user namespace, so every root-owned
+// file under the hard-bound host /etc reads as nobody(65534) in the sandbox.
+// OpenSSH fatally rejects any config file it reaches through Include unless the
+// file is owned by root or by the invoking user, so the host's global ssh_config
+// aborts ssh before it ever looks at ~/.ssh. The sandbox gets a user-owned copy
+// of /etc/ssh with the Include lines commented out instead: no bind can make
+// them pass the ownership check while uid 0 is unmapped, and what they carry is
+// host integration glue (systemd-ssh-proxy on NixOS, crypto policy elsewhere)
+// with nothing to contribute in here.
+
+// Testing seam: copy from a fixture instead of the host directory.
+const HOST_ETC_SSH = process.env.BUBBLEBOX_ETC_SSH || "/etc/ssh";
+
+function commentOutIncludes(text) {
+	return text
+		.split("\n")
+		.map((line) =>
+			/^[ \t]*include[ \t=]/i.test(line)
+				? `# bubblebox dropped: ${line.trim()}`
+				: line,
+		)
+		.join("\n");
+}
+
+// Only what ssh parses as configuration gets rewritten; moduli and the host
+// public keys are copied through verbatim.
+function isSshConfigFile(name) {
+	return name === "ssh_config" || name.endsWith(".conf");
+}
+
+function copySshTree(src, dst, depth = 0) {
+	if (depth > 8) {
+		return; // a symlinked directory pointing at an ancestor would recurse forever
+	}
+	let stat;
+	try {
+		// Follows symlinks: NixOS points ssh_config into /etc/static.
+		stat = fs.statSync(src);
+	} catch {
+		return; // dangling symlink
+	}
+	if (stat.isDirectory()) {
+		fs.mkdirSync(dst, { recursive: true });
+		for (const entry of fs.readdirSync(src)) {
+			copySshTree(path.join(src, entry), path.join(dst, entry), depth + 1);
+		}
+		return;
+	}
+	if (!stat.isFile()) {
+		return;
+	}
+	let content;
+	try {
+		content = fs.readFileSync(src);
+	} catch {
+		return; // unreadable, e.g. the host private keys — a client wants none of them
+	}
+	if (isSshConfigFile(path.basename(src))) {
+		content = commentOutIncludes(content.toString("utf8"));
+	}
+	fs.writeFileSync(dst, content, { mode: 0o444 });
+}
+
+function sanitizeEtcSsh(dst) {
+	if (!isDirectory(HOST_ETC_SSH)) {
+		return null;
+	}
+	copySshTree(HOST_ETC_SSH, dst);
+	return dst;
+}
+
+// =============================================================================
 // Sandbox Interface
 // =============================================================================
 
@@ -189,6 +264,7 @@ class BubblewrapSandbox extends Sandbox {
 			homeBindMounts,
 			parentMount,
 			repoRoot,
+			sanitizedEtcSsh,
 			allowSshAgent,
 			allowGpgAgent,
 			allowXdgRuntime,
@@ -209,6 +285,10 @@ class BubblewrapSandbox extends Sandbox {
 			"--ro-bind-try", "/lib", "/lib",
 			"--ro-bind-try", "/lib64", "/lib64",
 			"--ro-bind", "/etc", "/etc",
+
+			// Over the host /etc/ssh, whose root-owned Include chain ssh refuses
+			// to read in here (see sanitizeEtcSsh).
+			...(sanitizedEtcSsh ? ["--ro-bind", sanitizedEtcSsh, "/etc/ssh"] : []),
 
 			// Selective /run mounts (skip /run/user/$UID by default).
 			"--ro-bind-try", "/run/systemd/resolve", "/run/systemd/resolve",
@@ -533,26 +613,42 @@ function main() {
 	const sessionId = randomHex(8);
 
 	const home = process.env.HOME;
-	const sandboxHome = path.join(getTmpDir(), `${BOX.name}-${sessionId}`);
+	const sessionDir = path.join(getTmpDir(), `${BOX.name}-${sessionId}`);
+	const sandboxHome = path.join(sessionDir, "home");
 
 	const cleanup = () => {
 		try {
-			fs.rmSync(sandboxHome, { recursive: true, force: true });
+			fs.rmSync(sessionDir, { recursive: true, force: true });
 		} catch {
 			// Ignore cleanup errors.
 		}
 	};
-	process.on("exit", cleanup);
-	process.on("SIGINT", () => {
-		cleanup();
-		process.exit(130);
-	});
-	process.on("SIGTERM", () => {
-		cleanup();
-		process.exit(143);
-	});
+	// A dry run keeps the session dir instead: nothing was spawned to clean up
+	// after, and tests inspect what the printed plan points at.
+	const dryRun = Boolean(process.env.BUBBLEBOX_DRYRUN);
+	if (!dryRun) {
+		process.on("exit", cleanup);
+		process.on("SIGINT", () => {
+			cleanup();
+			process.exit(130);
+		});
+		process.on("SIGTERM", () => {
+			cleanup();
+			process.exit(143);
+		});
+	}
 
-	fs.mkdirSync(sandboxHome, { recursive: true });
+	// 0700: the sanitized /etc/ssh below holds whatever the invoking user can
+	// read out of the host directory.
+	fs.mkdirSync(sessionDir, { recursive: true, mode: 0o700 });
+	fs.mkdirSync(sandboxHome);
+
+	// Linux only: the hard-bound /etc and the unmapped uid 0 that make this
+	// necessary are bwrap's; Seatbelt leaves the host /etc alone.
+	const sanitizedEtcSsh =
+		process.platform === "linux"
+			? sanitizeEtcSsh(path.join(sessionDir, "etc-ssh"))
+			: null;
 
 	// Resolve tool-specific home bindings: ensure each src exists on the host
 	// (creating the directory or empty file as needed) and bind to the same
@@ -641,6 +737,7 @@ function main() {
 			homeBindMounts,
 			parentMount,
 			repoRoot,
+			sanitizedEtcSsh,
 			allowSshAgent: options.allowSshAgent,
 			allowGpgAgent: options.allowGpgAgent,
 			allowXdgRuntime: options.allowXdgRuntime,
@@ -663,7 +760,7 @@ exec ${shellQuote(BOX.tool)}${allArgs ? " " + allArgs : ""}
 
 	// Testing seam: emit the resolved sandbox invocation and exit without
 	// spawning, so tests can assert the mount plan without mounting anything.
-	if (process.env.BUBBLEBOX_DRYRUN) {
+	if (dryRun) {
 		const { cmd, args } = sandbox.wrap(script);
 		process.stdout.write(JSON.stringify({ cmd, args }) + "\n");
 		return;

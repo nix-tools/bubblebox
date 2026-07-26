@@ -48,6 +48,7 @@
             nativeBuildInputs = [
               pkgs.nodejs
               pkgs.bubblewrap
+              pkgs.openssh # the /etc/ssh test drives the real `ssh -G`
             ];
             BUBBLEBOX_TESTBOX = lib.getExe testbox;
           }

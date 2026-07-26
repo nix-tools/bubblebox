@@ -125,6 +125,17 @@ The `parentMounts` setting controls how much of the working tree's ancestry is b
 
 `$HOME` and `/` themselves are never mounted. Prior to profiles, boxes behaved like `"tree"`; the default is now the more conservative `"none"`.
 
+## SSH
+
+`/etc/ssh` is bound from a sanitized copy rather than the host directory: the copy is owned by the invoking user, and every `Include` line in it is commented out. OpenSSH fatally rejects a config file it reaches through `Include` unless the file is owned by root or by the invoking user, and bwrap maps only the invoking uid — so root-owned host config reads as `nobody` and `ssh` aborts before it ever looks at `~/.ssh`. What the includes carry is host integration glue (systemd-ssh-proxy on NixOS, crypto policy elsewhere) that no bind can make pass that check while uid 0 is unmapped.
+
+Reaching a remote still needs a way to authenticate, since `$HOME` is isolated:
+
+```sh
+claudebox --allow-ssh-agent  # bind $SSH_AUTH_SOCK, e.g. for `git push`
+claudebox --ro ~/.ssh        # or hand over the keys themselves
+```
+
 ## This flake exposes
 
 - **apps** for running without installing

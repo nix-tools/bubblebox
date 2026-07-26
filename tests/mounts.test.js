@@ -34,6 +34,20 @@ function scratch() {
 	return { home, cwd, env };
 }
 
+// A stand-in for the host /etc/ssh, handed to the launcher via
+// BUBBLEBOX_ETC_SSH. Its ssh_config includes a file OpenSSH refuses to read: on
+// a real host the include is rejected for being root-owned under an unmapped
+// uid, which needs root to set up; group-writable trips the very same check.
+function etcSshFixture() {
+	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bb-etc-")));
+	const poisoned = path.join(dir, "poisoned.conf");
+	fs.writeFileSync(poisoned, "Compression yes\n");
+	fs.chmodSync(poisoned, 0o666); // chmod, not the write mode: umask would mask it back
+	const sshConfig = path.join(dir, "ssh_config");
+	fs.writeFileSync(sshConfig, `Include ${poisoned}\nConnectTimeout 42\n`);
+	return { dir, sshConfig };
+}
+
 // Resolve the sandbox invocation for `boxArgs` without spawning it.
 function plan(boxArgs, { cwd, env }) {
 	const out = execFileSync(BOX, boxArgs, {
@@ -140,6 +154,45 @@ test("parentMounts=tree binds the top-of-tree, not the immediate parent", () => 
 			b.some((m) => m.dst === fs.realpathSync(os.tmpdir()) && m.mode === "ro"),
 		"tree should bind the top ancestor below /",
 	);
+});
+
+// The sanitized copy the plan binds over /etc/ssh. A dry run leaves it on disk.
+function sanitizedEtcSsh(s, etc) {
+	const pl = plan([], { ...s, env: { ...s.env, BUBBLEBOX_ETC_SSH: etc.dir } });
+	return { pl, src: binds(pl).findLast((m) => m.dst === "/etc/ssh").src };
+}
+
+test("/etc/ssh is bound read-only from a copy, over the host /etc", () => {
+	const s = scratch();
+	const etc = etcSshFixture();
+	const { pl, src } = sanitizedEtcSsh(s, etc);
+	const b = binds(pl);
+	assert.ok(
+		b.findLastIndex((m) => m.dst === "/etc/ssh") > b.findIndex((m) => m.dst === "/etc"),
+		"the copy must be bound after the host /etc, or it is shadowed by it",
+	);
+	assert.strictEqual(b.findLast((m) => m.dst === "/etc/ssh").mode, "ro");
+	assert.notStrictEqual(src, etc.dir, "must bind the copy, not the host directory");
+});
+
+test("ssh accepts the sanitized ssh_config but not the host's", () => {
+	const s = scratch();
+	const etc = etcSshFixture();
+
+	// Guard against a toothless fixture: ssh must reject the host chain outright.
+	assert.throws(
+		() => execFileSync("ssh", ["-G", "-F", etc.sshConfig, "example.com"], { stdio: "pipe" }),
+		/Bad owner or permissions/,
+	);
+
+	const { src } = sanitizedEtcSsh(s, etc);
+	const out = execFileSync(
+		"ssh",
+		["-G", "-F", path.join(src, "ssh_config"), "example.com"],
+		{ encoding: "utf8" },
+	);
+	assert.match(out, /^connecttimeout 42$/m, "directives other than Include survive");
+	assert.doesNotMatch(out, /^compression yes$/m, "the dropped include is not honoured");
 });
 
 test("end-to-end: profile mounts really are readable, writable, or absent", () => {
