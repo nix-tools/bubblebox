@@ -372,11 +372,11 @@ class BubblewrapSandbox extends Sandbox {
 
 		// Profile mounts, then user-supplied mounts, so CLI flags override
 		// profile paths (bwrap applies binds in order; later wins on overlap).
-		for (const { path: p, mode } of profileMounts) {
-			args.push(mode === "rw" ? "--bind-try" : "--ro-bind-try", p, p);
+		for (const { src, dst, mode } of profileMounts) {
+			args.push(mode === "rw" ? "--bind-try" : "--ro-bind-try", src, dst);
 		}
-		for (const { path: p, mode } of extraMounts) {
-			args.push(mode === "rw" ? "--bind" : "--ro-bind", p, p);
+		for (const { src, dst, mode } of extraMounts) {
+			args.push(mode === "rw" ? "--bind" : "--ro-bind", src, dst);
 		}
 
 		args.push("bash", "-c", script);
@@ -415,9 +415,9 @@ class SeatbeltSandbox extends Sandbox {
 		}
 		// Profile and user-supplied rw paths. Read-only paths need no entry —
 		// the default `(allow file-read*)` rule already covers them.
-		for (const { path: p, mode } of [...profileMounts, ...extraMounts]) {
+		for (const { src, mode } of [...profileMounts, ...extraMounts]) {
 			if (mode === "rw") {
-				writablePaths.push(`(subpath ${JSON.stringify(p)})`);
+				writablePaths.push(`(subpath ${JSON.stringify(src)})`);
 			}
 		}
 
@@ -714,11 +714,14 @@ function main() {
 
 	// Profile mounts: "~/" expands to $HOME; missing paths are skipped
 	// (bwrap try-binds), so one profile can serve differently equipped hosts.
+	// src is canonical (realpath) so the bind source resolves symlinks; dst is
+	// the path as written so the mount appears where the user expects it (e.g.
+	// --rw /var/run/docker.sock stays at /var/run, not the /run it resolves to).
 	const profileMounts = (profile.mounts || []).map(({ path: p, mode }) => {
 		const expanded =
 			p === "~" || p.startsWith("~/") ? path.join(home, p.slice(1)) : p;
 		const abs = path.resolve(projectDir, expanded);
-		return { path: pathExists(abs) ? realpath(abs) : abs, mode };
+		return { src: pathExists(abs) ? realpath(abs) : abs, dst: abs, mode };
 	});
 
 	const extraMounts = options.extraMounts.map(({ path: p, mode }) => {
@@ -727,7 +730,7 @@ function main() {
 			console.error(`${BOX.name}: --${mode} path does not exist: ${p}`);
 			process.exit(1);
 		}
-		return { path: realpath(abs), mode };
+		return { src: realpath(abs), dst: abs, mode };
 	});
 
 	let sandbox;
