@@ -23,6 +23,8 @@ Like numtide's claudebox, each CLI gets a generic NixOS environment with an isol
 
 ## Getting started: Minimal flake with a numtide devshell
 
+If you are stuck installing bubblebox with this explanation, don't hesitate to email me.
+
 ```nix
 {
   inputs = {
