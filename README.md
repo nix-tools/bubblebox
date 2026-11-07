@@ -1,6 +1,6 @@
 # bubblebox
 
-[`nix`][nix] + [`bwrap`][bwrap] + [`rstrict`][rstrict] + `$CLI` = `${CLI}box`!
+[`nix`][nix] + [`bwrap`][bwrap] + `$CLI` = `${CLI}box`!
 
 Generalizes numtide's [claudebox] over an arbitrary CLI binary, so the same sandboxing wrapper
 serves multiple CLIs from one builder. Adds [Landlock LSM][landlock] integration (soon). Additional
